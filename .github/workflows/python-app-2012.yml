@@ -26,7 +26,7 @@ jobs:
         env:
           MODEL_PATH: models/bike_demand_rf_model.joblib
           DATA_PATH: data/day_2012.csv
-          BASELINE_RMSE: "500"
-          QUALITY_FACTOR: "0.95"
+          BASELINE_RMSE: "315.7"
+          QUALITY_FACTOR: "1.05"
         run: |
           python tests/test_model.py
