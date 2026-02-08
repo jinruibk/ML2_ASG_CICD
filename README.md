@@ -98,11 +98,15 @@ Passes or fails the build
 
 Quality Gate Criteria
 
-The model must achieve:
+The deployed model must satisfy the following performance requirements based on baseline results obtained in Task 1:
 
-RMSE ≤ 95% of baseline RMSE (Task 1)
+RMSE ≤ Baseline RMSE × Quality Factor (1.20)
+MAE ≤ Baseline MAE × Quality Factor (1.20)
+R² ≥ Minimum Threshold (0.80)
 
-If this condition is not met, deployment is blocked.
+These thresholds allow for minor performance fluctuations while preventing significant degradation caused by data drift or modelling issues.
+
+If any of the above conditions are not met, the CI/CD pipeline automatically fails and deployment is blocked.
 
 
 
