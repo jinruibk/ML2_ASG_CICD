@@ -3,133 +3,90 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-# -----------------------------
-# Config (override via env in GitHub Actions)
-# -----------------------------
+# ======================
+# CONFIG (edit here)
+# ======================
 MODEL_PATH = os.getenv("MODEL_PATH", "models/bike_demand_rf_model.joblib")
-DATA_PATH  = os.getenv("DATA_PATH", "data/day_2011.csv")
-TARGET_COL = os.getenv("TARGET_COL", "cnt")
+DATA_PATH  = os.getenv("DATA_PATH",  "data/day_2011.csv")
 
-BASELINE_RMSE  = float(os.getenv("BASELINE_RMSE", "500"))
-QUALITY_FACTOR = float(os.getenv("QUALITY_FACTOR", "0.95"))
-THRESHOLD      = QUALITY_FACTOR * BASELINE_RMSE
+BASELINE_RMSE = float(os.getenv("BASELINE_RMSE", "315.7"))
+BASELINE_MAE  = float(os.getenv("BASELINE_MAE",  "196.3"))
+QUALITY_FACTOR = float(os.getenv("QUALITY_FACTOR", "1.00"))  
+R2_MIN = float(os.getenv("R2_MIN", "0.80"))
 
-print("=== Quality Gate Config ===")
-print(f"MODEL_PATH      = {MODEL_PATH}")
-print(f"DATA_PATH       = {DATA_PATH}")
-print(f"BASELINE_RMSE   = {BASELINE_RMSE}")
-print(f"QUALITY_FACTOR  = {QUALITY_FACTOR}")
-print(f"THRESHOLD       = {THRESHOLD}")
-print("===========================")
-
-# -----------------------------
-# Apply SAME cleaning as training
-# -----------------------------
-def align_features_like_training(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies the same transformations you used earlier:
-    - parse dteday
-    - extract month/day/weekday
-    - drop dteday, mnth, old weekday
-    - rename weekday_new -> weekday
-    - drop year (as per your pipeline)
-    Works even if df is already cleaned.
-    """
-    # If raw date exists, build derived features
-    if "dteday" in df.columns:
-        df["dteday"] = pd.to_datetime(df["dteday"], errors="coerce", dayfirst=True)
-
-        # Create derived columns 
-        if "month" not in df.columns:
-            df["month"] = df["dteday"].dt.month
-        if "day" not in df.columns:
-            df["day"] = df["dteday"].dt.day
-
-        if "weekday" not in df.columns:
-            df["weekday_new"] = df["dteday"].dt.weekday
-
-    
-    drop_cols = [c for c in ["dteday", "mnth"] if c in df.columns]
-    
-    if "weekday_new" in df.columns and "weekday" not in df.columns:
-        df = df.rename(columns={"weekday_new": "weekday"})
-    elif "weekday_new" in df.columns and "weekday" in df.columns:
-        # keep weekday, drop weekday_new
-        drop_cols.append("weekday_new")
-
-    # Drop year 
-    if "year" in df.columns:
-        drop_cols.append("year")
-
-    # Now actually drop selected columns
-    drop_cols = list(dict.fromkeys(drop_cols))  # de-duplicate
-    if drop_cols:
-        df = df.drop(columns=drop_cols, errors="ignore")
-
-    return df
+RMSE_THRESHOLD = BASELINE_RMSE * QUALITY_FACTOR
+MAE_THRESHOLD  = BASELINE_MAE  * QUALITY_FACTOR
 
 
-# -----------------------------
-# Load model + data
-# -----------------------------
-if not os.path.exists(MODEL_PATH):
-    print(f"[FAIL] Model file not found: {MODEL_PATH}")
-    sys.exit(1)
-
-if not os.path.exists(DATA_PATH):
-    print(f"[FAIL] Data file not found: {DATA_PATH}")
-    sys.exit(1)
-
+# ======================
+# LOAD MODEL + DATA
+# ======================
 model = joblib.load(MODEL_PATH)
 df = pd.read_csv(DATA_PATH)
 
-if TARGET_COL not in df.columns:
-    print(f"[FAIL] Target column '{TARGET_COL}' not found in dataset.")
-    print("Columns:", list(df.columns))
-    sys.exit(1)
+# If dteday exists, convert to month/day/weekday and drop it
+if "dteday" in df.columns:
+    df["dteday"] = pd.to_datetime(df["dteday"], dayfirst=True, errors="coerce")
+    df["month"] = df["dteday"].dt.month
+    df["day"] = df["dteday"].dt.day
+    df["weekday"] = df["dteday"].dt.weekday
+    df = df.drop(columns=["dteday"], errors="ignore")
 
-# Apply same cleaning as training so feature columns match
-df = align_features_like_training(df)
+# If mnth exists but month doesn't, rename it
+if "mnth" in df.columns and "month" not in df.columns:
+    df = df.rename(columns={"mnth": "month"})
 
-# Split
-X = df.drop(columns=[TARGET_COL])
-y = df[TARGET_COL]
+# Split X/y
+y = df["cnt"]
+X = df.drop(columns=["cnt"])
 
-# -----------------------------
-# Feature name alignment with model (prevents mismatch)
-# -----------------------------
-# scikit-learn stores training feature names in feature_names_in_ (for many models)
+# Align columns to what the model was trained on (prevents "feature names mismatch")
 if hasattr(model, "feature_names_in_"):
-    expected = list(model.feature_names_in_)
-    missing = [c for c in expected if c not in X.columns]
-    extra = [c for c in X.columns if c not in expected]
+    expected_cols = list(model.feature_names_in_)
+    X = X.reindex(columns=expected_cols, fill_value=0)
 
-    if missing:
-        print("[FAIL] Missing required features:", missing)
-        print("Current columns:", list(X.columns))
-        sys.exit(1)
-
-    # Reorder and drop extras to match exactly
-    X = X[expected]
-    if extra:
-        print("[INFO] Dropping extra features not seen during training:", extra)
-
-# -----------------------------
-# Predict + evaluate
-# -----------------------------
+# ======================
+# METRICS
+# ======================
 preds = model.predict(X)
-rmse = float(np.sqrt(mean_squared_error(y, preds)))
+rmse = np.sqrt(mean_squared_error(y, preds))
+mae = mean_absolute_error(y, preds)
+r2 = r2_score(y, preds)
 
-print(f"RMSE = {rmse}")
+print("=== Model Performance ===")
+print("RMSE:", rmse)
+print("MAE :", mae)
+print("R2  :", r2)
+print("=========================")
 
-# -----------------------------
-# Quality Gate decision
-# -----------------------------
-if rmse <= THRESHOLD:
-    print(f"[PASS] ✅ RMSE {rmse:.3f} <= {THRESHOLD:.3f}")
-    sys.exit(0)
+# ======================
+# QUALITY GATE
+# ======================
+fail = False
+
+if rmse > RMSE_THRESHOLD:
+    print(f"[FAIL] RMSE {rmse:.3f} > {RMSE_THRESHOLD:.3f}")
+    fail = True
 else:
-    print(f"[FAIL] ❌ RMSE {rmse:.3f} > {THRESHOLD:.3f}")
+    print(f"[PASS] RMSE {rmse:.3f} <= {RMSE_THRESHOLD:.3f}")
+
+if mae > MAE_THRESHOLD:
+    print(f"[FAIL] MAE {mae:.3f} > {MAE_THRESHOLD:.3f}")
+    fail = True
+else:
+    print(f"[PASS] MAE {mae:.3f} <= {MAE_THRESHOLD:.3f}")
+
+if r2 < R2_MIN:
+    print(f"[FAIL] R2 {r2:.3f} < {R2_MIN:.3f}")
+    fail = True
+else:
+    print(f"[PASS] R2 {r2:.3f} >= {R2_MIN:.3f}")
+
+if fail:
+    print("\nQuality Gate: ❌ FAILED")
     sys.exit(1)
+else:
+    print("\nQuality Gate: ✅ PASSED")
+    sys.exit(0)
