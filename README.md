@@ -88,41 +88,19 @@ Otherwise, the test will fail.
 
 The GitHub Actions workflow automatically:
 
-
-
 Sets up a Python environment
-
-
-
 Installs dependencies
-
-
-
 Loads the trained model
-
-
-
 Evaluates performance
-
-
-
 Applies quality gate checks
-
-
-
 Passes or fails the build
-
 
 
 Quality Gate Criteria
 
 The model must achieve:
 
-
-
 RMSE ≤ 95% of baseline RMSE (Task 1)
-
-
 
 If this condition is not met, deployment is blocked.
 
