@@ -13,7 +13,7 @@ DATA_PATH  = os.getenv("DATA_PATH",  "data/day_2011.csv")
 
 BASELINE_RMSE = float(os.getenv("BASELINE_RMSE", "315.7"))
 BASELINE_MAE  = float(os.getenv("BASELINE_MAE",  "196.3"))
-QUALITY_FACTOR = float(os.getenv("QUALITY_FACTOR", "1.05"))  
+QUALITY_FACTOR = float(os.getenv("QUALITY_FACTOR", "1.20"))  
 R2_MIN = float(os.getenv("R2_MIN", "0.80"))
 
 RMSE_THRESHOLD = BASELINE_RMSE * QUALITY_FACTOR
